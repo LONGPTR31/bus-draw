@@ -150,7 +150,7 @@
 
         setIsDrawing(true);
         let counter = 0;
-        // 每 0.2 秒 (200 毫秒) 跳動一次，共跳動 20 次
+        // 每 0.1 秒 (100 毫秒) 跳動一次，共跳動 20 次 (共 2 秒)
         const interval = setInterval(() => {
           const tempSeat = availableSeats[Math.floor(Math.random() * availableSeats.length)];
           setAnimatingSeat(tempSeat);
@@ -170,7 +170,7 @@
                 setIsDrawing(false);
               });
           }
-        }, 200);
+        }, 100);
       };
 
       const handleAdminLogin = () => {
