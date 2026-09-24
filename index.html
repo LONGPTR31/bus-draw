@@ -95,12 +95,12 @@
         if (existingSeat) {
           setCurrentUser(trimmedName);
           localStorage.setItem('bus_passenger_name', trimmedName);
-          return alert(`您已經抽過座位了，您的東湖交通車座位是：${existingSeat}`);
+          return alert(`您已經抽過座位了，您的座位是：${existingSeat}`);
         }
 
         const occupiedSeats = Object.keys(assignedSeats);
         const availableSeats = DRAWABLE_SEATS.filter(seat => !occupiedSeats.includes(seat));
-        if (availableSeats.length === 0) return alert('抱歉，東湖交通車所有可抽座位均已額滿！');
+        if (availableSeats.length === 0) return alert('抱歉，交通車所有可抽座位均已額滿！');
 
         setIsDrawing(true);
         let counter = 0;
