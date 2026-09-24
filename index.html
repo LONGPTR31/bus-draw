@@ -18,7 +18,6 @@
   <div id="root"></div>
 
   <script type="text/babel">
-    // Firebase 金鑰
     const firebaseConfig = {
       apiKey: "AIzaSyDl1q7RLHwyuJT42iBT6815zRBkTgBCy40",
       authDomain: "bus-seat-draw.firebaseapp.com",
@@ -29,7 +28,6 @@
       measurementId: "G-K4QEHJSSNL"
     };
 
-    // 初始化 Firebase
     if (!firebase.apps.length) {
       firebase.initializeApp(firebaseConfig);
     }
@@ -60,17 +58,12 @@
       }
     ];
 
-    // 其他站上車（1~3排及4-1、4-3）
-    const OTHER_STATIONS_SEATS = [
+    // 按車頭至車尾順序排列的所有可抽座位（自動排除了車長席、值班席、安全門、自由座）
+    const ALL_DRAWABLE_SEATS = [
       '1-1', '1-3',
       '2-1', '2-3', '2-4', '2-2',
       '3-1', '3-3', '3-4', '3-2',
-      '4-1', '4-3'
-    ];
-
-    // 東湖宿舍上車（5~10排及4-4、4-2）
-    const DONGHU_DORM_SEATS = [
-      '4-4', '4-2',
+      '4-1', '4-3', '4-4', '4-2',
       '5-1', '5-3', '5-4', '5-2',
       '6-1', '6-3', '6-4', '6-2',
       '7-4', '7-2',
@@ -91,8 +84,11 @@
       const [isAdmin, setIsAdmin] = React.useState(false);
       const [isOpen, setIsOpen] = React.useState(false);
 
+      // 動態人數設定（預設 其他站 9 人，東湖 10 人）
+      const [otherCount, setOtherCount] = React.useState(9);
+      const [donghuCount, setDonghuCount] = React.useState(10);
+
       React.useEffect(() => {
-        // 監聽座位資料
         const unsubscribeSeats = db.collection('seats').onSnapshot(snapshot => {
           const seatsData = {};
           snapshot.forEach(doc => {
@@ -101,12 +97,14 @@
           setAssignedSeats(seatsData);
         });
 
-        // 監聽系統開關狀態（預設關閉）
         const unsubscribeConfig = db.collection('settings').doc('config').onSnapshot(doc => {
           if (doc.exists) {
-            setIsOpen(doc.data().isOpen ?? false);
+            const data = doc.data();
+            setIsOpen(data.isOpen ?? false);
+            if (data.otherCount !== undefined) setOtherCount(data.otherCount);
+            if (data.donghuCount !== undefined) setDonghuCount(data.donghuCount);
           } else {
-            db.collection('settings').doc('config').set({ isOpen: false });
+            db.collection('settings').doc('config').set({ isOpen: false, otherCount: 9, donghuCount: 10 });
             setIsOpen(false);
           }
         });
@@ -122,6 +120,41 @@
 
       const mySeat = currentUser ? Object.keys(assignedSeats).find(seat => assignedSeats[seat] === currentUser) : null;
 
+      // 動態根據人數計算劃分區域與獨立位池
+      const getSeatsPool = (loc, occupied) => {
+        const targetOtherCount = Number(otherCount) || 9;
+        const targetDonghuCount = Number(donghuCount) || 10;
+
+        // 計算「其他站」應有的獨立位數量 (1-5人:1, 6-10人:2, 11-15人:3)
+        const otherSoloSeatsNeeded = Math.ceil(targetOtherCount / 5);
+
+        // 1. 劃分其他站區域 (由前向後取對應人數的座位庫)
+        const otherRegion = ALL_DRAWABLE_SEATS.slice(0, targetOtherCount);
+        
+        // 2. 劃分東湖宿舍區域 (接續在其他站後面)
+        const donghuRegion = ALL_DRAWABLE_SEATS.slice(targetOtherCount, targetOtherCount + targetDonghuCount);
+
+        if (loc === 'other') {
+          // 其他站抽籤池：包含 N 個獨立位與其餘雙人座
+          // 獨立位優先採每排左1(X-1)或右1(X-2)
+          const soloSeats = otherRegion.filter(s => s.endsWith('-1') || s.endsWith('-2')).slice(0, otherSoloSeatsNeeded);
+          // 其餘補足雙人座，直至滿 targetOtherCount
+          const pairedSeats = otherRegion.filter(s => !soloSeats.includes(s));
+          const totalOtherPool = [...soloSeats, ...pairedSeats].slice(0, targetOtherCount);
+
+          // 回傳尚未被抽走的座位
+          return totalOtherPool.filter(s => !occupied.includes(s));
+        } else {
+          // 東湖宿舍抽籤池：取東湖劃分區內未被佔用的座位
+          let available = donghuRegion.filter(s => !occupied.includes(s));
+          // 若中後段區域額滿，自動向上/下尋找剩餘空位
+          if (available.length === 0) {
+            available = ALL_DRAWABLE_SEATS.filter(s => !occupied.includes(s));
+          }
+          return available;
+        }
+      };
+
       const handleDraw = async () => {
         if (!isOpen) return alert('目前尚未開放抽籤，請等待管理員公告開放時間！');
         const trimmedName = name.trim();
@@ -136,15 +169,13 @@
         }
 
         const locationName = location === 'donghu' ? '東湖宿舍' : '其他站';
-        const confirmText = `【確認資料】\n姓名：${trimmedName}\n上車地點：${locationName}\n\n請確認以上資料是否正確？`;
-        if (!confirm(confirmText)) return;
+        if (!confirm(`【確認資料】\n姓名：${trimmedName}\n上車地點：${locationName}\n\n請確認以上資料是否正確？`)) return;
 
-        const targetSeats = location === 'donghu' ? DONGHU_DORM_SEATS : OTHER_STATIONS_SEATS;
         const occupiedSeats = Object.keys(assignedSeats);
-        const availableSeats = targetSeats.filter(seat => !occupiedSeats.includes(seat));
+        const availableSeats = getSeatsPool(location, occupiedSeats);
 
         if (availableSeats.length === 0) {
-          return alert(`抱歉，【${locationName}】的所有可抽座位均已額滿！`);
+          return alert(`抱歉，【${locationName}】目前已無可抽座位！`);
         }
 
         setIsDrawing(true);
@@ -163,7 +194,7 @@
                 setIsDrawing(false);
                 setAnimatingSeat('');
               })
-              .catch(err => {
+              .catch(() => {
                 alert('抽籤發生錯誤，請重試！');
                 setIsDrawing(false);
               });
@@ -196,32 +227,38 @@
           .catch(() => alert('設定更新失敗！'));
       };
 
+      const handleSaveConfig = () => {
+        const o = Number(otherCount);
+        const d = Number(donghuCount);
+        if (isNaN(o) || isNaN(d) || o < 0 || d < 0) {
+          return alert('請輸入正確的人數數值！');
+        }
+        db.collection('settings').doc('config').set({
+          otherCount: o,
+          donghuCount: d
+        }, { merge: true })
+          .then(() => alert(`設定已更新！\n其他站人數：${o} 人 (自動配置 ${Math.ceil(o/5)} 個獨立位)\n東湖宿舍人數：${d} 人`))
+          .catch(() => alert('設定更新失敗！'));
+      };
+
       const handleAdminSeatClick = (seatId, currentName) => {
         if (!isAdmin) return;
-
         const isDriver = seatId === 'driver_seat';
         const labelText = isDriver ? '車長座位' : `座位 ${seatId}`;
 
         if (currentName) {
           const action = prompt(`【管理員編輯 - ${labelText}】\n目前設定：${currentName}\n\n請選擇操作：\n1. 輸入「新姓名」直接修改\n2. 輸入「0」或留空刪除紀錄\n3. 點擊「取消」不變更`, currentName);
           if (action === null) return;
-          
           const trimmedAction = action.trim();
           if (trimmedAction === '' || trimmedAction === '0') {
-            db.collection('seats').doc(seatId).delete()
-              .then(() => alert(`已清除 ${labelText} 的資料！`))
-              .catch(() => alert('清除失敗！'));
+            db.collection('seats').doc(seatId).delete();
           } else {
-            db.collection('seats').doc(seatId).set({ passengerName: trimmedAction })
-              .then(() => alert(`${labelText} 已更新為：${trimmedAction}`))
-              .catch(() => alert('更新失敗！'));
+            db.collection('seats').doc(seatId).set({ passengerName: trimmedAction });
           }
         } else {
           const newName = prompt(`【管理員新增 - ${labelText}】\n請輸入姓名：`);
           if (newName && newName.trim()) {
-            db.collection('seats').doc(seatId).set({ passengerName: newName.trim() })
-              .then(() => alert(`已成功設定 ${newName.trim()} 為 ${labelText}！`))
-              .catch(() => alert('設定失敗！'));
+            db.collection('seats').doc(seatId).set({ passengerName: newName.trim() });
           }
         }
       };
@@ -238,7 +275,6 @@
 
       return (
         <div className="max-w-md mx-auto p-4 pb-20">
-          {/* 頂部 Header：已完全移除管理員入口 */}
           <header className="text-center mb-6 bg-white p-4 rounded-xl shadow-md">
             <h1 className="text-2xl font-bold text-slate-800">🚌 交通車座位抽籤</h1>
             <div className="mt-2">
@@ -258,9 +294,7 @@
                     disabled={!isOpen}
                     onClick={() => setLocation('donghu')}
                     className={`py-3 px-3 text-sm rounded-lg font-bold border transition-all ${
-                      location === 'donghu' 
-                        ? 'bg-blue-600 text-white border-blue-600 shadow' 
-                        : 'bg-slate-50 text-slate-700 border-slate-300 hover:bg-slate-100'
+                      location === 'donghu' ? 'bg-blue-600 text-white border-blue-600 shadow' : 'bg-slate-50 text-slate-700 border-slate-300 hover:bg-slate-100'
                     } ${!isOpen && 'opacity-60 cursor-not-allowed'}`}
                   >
                     🏢 東湖宿舍
@@ -270,9 +304,7 @@
                     disabled={!isOpen}
                     onClick={() => setLocation('other')}
                     className={`py-3 px-3 text-sm rounded-lg font-bold border transition-all ${
-                      location === 'other' 
-                        ? 'bg-blue-600 text-white border-blue-600 shadow' 
-                        : 'bg-slate-50 text-slate-700 border-slate-300 hover:bg-slate-100'
+                      location === 'other' ? 'bg-blue-600 text-white border-blue-600 shadow' : 'bg-slate-50 text-slate-700 border-slate-300 hover:bg-slate-100'
                     } ${!isOpen && 'opacity-60 cursor-not-allowed'}`}
                   >
                     🚏 其他站
@@ -365,7 +397,7 @@
             </div>
           </div>
 
-          {/* 唯一的管理員入口：位在網頁最下方（車體地圖下方） */}
+          {/* 底部管理員區塊 */}
           <div className="mt-8 pt-4 border-t border-slate-200">
             <button 
               onClick={toggleAdmin}
@@ -388,12 +420,47 @@
                     <button onClick={handleAdminLogin} className="bg-amber-600 hover:bg-amber-700 text-white px-4 text-sm rounded font-bold">登入</button>
                   </div>
                 ) : (
-                  <div className="space-y-3">
+                  <div className="space-y-4">
                     <div className="flex justify-between items-center pb-2 border-b border-amber-200">
                       <h3 className="font-bold text-amber-900 text-sm">🛠️ 管理員模式已啟用</h3>
                       <span className="text-[10px] text-amber-800 bg-amber-200 px-2 py-0.5 rounded">點擊圖表座位可增刪修改</span>
                     </div>
-                    
+
+                    {/* 當期搭乘人數設定 */}
+                    <div className="bg-white p-3 rounded-lg border border-amber-200 space-y-2">
+                      <p className="text-xs font-bold text-amber-900 mb-1">📊 當期搭乘人數設定 (動態劃位與獨立位)</p>
+                      <div className="grid grid-cols-2 gap-2 text-xs">
+                        <div>
+                          <label className="block text-slate-600 mb-1">🚏 其他站人數：</label>
+                          <input 
+                            type="number" 
+                            value={otherCount} 
+                            onChange={e => setOtherCount(e.target.value)}
+                            className="w-full p-1.5 border rounded focus:ring-1 focus:ring-amber-500"
+                          />
+                          <span className="text-[10px] text-slate-400 block mt-0.5">
+                            (釋出 {Math.ceil((Number(otherCount)||0)/5)} 個獨立位)
+                          </span>
+                        </div>
+                        <div>
+                          <label className="block text-slate-600 mb-1">🏢 東湖宿舍人數：</label>
+                          <input 
+                            type="number" 
+                            value={donghuCount} 
+                            onChange={e => setDonghuCount(e.target.value)}
+                            className="w-full p-1.5 border rounded focus:ring-1 focus:ring-amber-500"
+                          />
+                          <span className="text-[10px] text-slate-400 block mt-0.5">(接續劃分座位)</span>
+                        </div>
+                      </div>
+                      <button 
+                        onClick={handleSaveConfig}
+                        className="w-full bg-amber-600 hover:bg-amber-700 text-white py-1.5 rounded text-xs font-bold shadow"
+                      >
+                        💾 儲存人數設定
+                      </button>
+                    </div>
+
                     <button 
                       onClick={toggleSystemOpen}
                       className={`w-full py-2.5 rounded text-xs font-bold text-white shadow transition-all ${
@@ -411,7 +478,6 @@
               </div>
             )}
           </div>
-
         </div>
       );
     }
@@ -420,7 +486,6 @@
       if (type === 'driver') {
         const driverName = name || '';
         const isTaken = !!driverName;
-        
         let driverStyle = "bg-gray-200 text-gray-600 border-gray-300";
         if (isAdmin) {
           driverStyle = isTaken 
@@ -433,13 +498,11 @@
         return (
           <div 
             onClick={() => isAdmin && onAdminClick(id, driverName)}
-            title={isAdmin ? (isTaken ? "點擊修改或刪除車長姓名" : "點擊手動安排車長") : ""}
             className={`w-full h-12 border rounded flex flex-col items-center justify-center text-xs font-bold transition-all ${driverStyle}`}
           >
             <span className="font-semibold">{label}</span>
             <span className="text-[10px] truncate max-w-full px-1">
               {driverName ? `(${driverName})` : ''}
-              {isAdmin && <span className="text-[8px] block text-amber-700">{isTaken ? '✏️修改' : '➕手動'}</span>}
             </span>
           </div>
         );
@@ -465,22 +528,14 @@
         style += " cursor-pointer hover:bg-emerald-100 transition-colors border-dashed border-2";
       }
 
-      const handleClick = () => {
-        if (isAdmin) {
-          onAdminClick(id, name);
-        }
-      };
-
       return (
         <div 
-          onClick={handleClick}
-          title={isAdmin ? (isTaken ? "點擊修改或刪除此座位" : "點擊手動安排人員") : ""}
+          onClick={() => isAdmin && onAdminClick(id, name)}
           className={`flex-1 h-12 border rounded flex flex-col items-center justify-center text-xs transition-all ${style}`}
         >
           <span className="font-semibold">{id}</span>
           <span className="text-[10px] truncate max-w-full px-1">
             {name || '可抽'}
-            {isAdmin && <span className="text-[8px] block text-amber-700">{isTaken ? '✏️修改' : '➕手動'}</span>}
           </span>
         </div>
       );
