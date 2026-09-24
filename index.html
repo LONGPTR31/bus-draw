@@ -88,23 +88,42 @@
       const [showAdmin, setShowAdmin] = React.useState(false);
       const [adminPassword, setAdminPassword] = React.useState('');
       const [isAdmin, setIsAdmin] = React.useState(false);
+      const [isOpen, setIsOpen] = React.useState(false); // 預設關閉抽籤
 
       React.useEffect(() => {
-        const unsubscribe = db.collection('seats').onSnapshot(snapshot => {
+        // 監聽座位資料
+        const unsubscribeSeats = db.collection('seats').onSnapshot(snapshot => {
           const seatsData = {};
           snapshot.forEach(doc => {
             seatsData[doc.id] = doc.data().passengerName;
           });
           setAssignedSeats(seatsData);
         });
+
+        // 監聽系統開關狀態（預設關閉 false）
+        const unsubscribeConfig = db.collection('settings').doc('config').onSnapshot(doc => {
+          if (doc.exists) {
+            setIsOpen(doc.data().isOpen ?? false);
+          } else {
+            // 初始化設為關閉
+            db.collection('settings').doc('config').set({ isOpen: false });
+            setIsOpen(false);
+          }
+        });
+
         const savedUser = localStorage.getItem('bus_passenger_name');
         if (savedUser) setCurrentUser(savedUser);
-        return () => unsubscribe();
+
+        return () => {
+          unsubscribeSeats();
+          unsubscribeConfig();
+        };
       }, []);
 
       const mySeat = currentUser ? Object.keys(assignedSeats).find(seat => assignedSeats[seat] === currentUser) : null;
 
       const handleDraw = async () => {
+        if (!isOpen) return alert('目前尚未開放抽籤，請等待管理員公告開放時間！');
         const trimmedName = name.trim();
         if (!trimmedName) return alert('請輸入您的姓名！');
         if (!location) return alert('請選擇您的上車地點！');
@@ -170,6 +189,13 @@
         }
       };
 
+      const toggleSystemOpen = () => {
+        const nextState = !isOpen;
+        db.collection('settings').doc('config').set({ isOpen: nextState }, { merge: true })
+          .then(() => alert(`抽籤系統已修改為：${nextState ? '【開放中】' : '【關閉中】'}`))
+          .catch(() => alert('設定更新失敗！'));
+      };
+
       const handleAdminSeatClick = (seatId, currentName) => {
         if (!isAdmin) return;
 
@@ -214,16 +240,21 @@
         <div className="max-w-md mx-auto p-4 pb-20">
           <header className="text-center mb-6 bg-white p-4 rounded-xl shadow-md">
             <h1 className="text-2xl font-bold text-slate-800">🚌 交通車座位抽籤</h1>
+            <div className="mt-2">
+              <span className={`inline-block px-3 py-1 rounded-full text-xs font-bold ${isOpen ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'}`}>
+                {isOpen ? '🟢 抽籤系統開放中' : '🔴 系統尚未開放抽籤'}
+              </span>
+            </div>
             <button 
               onClick={toggleAdmin}
-              className="text-xs text-slate-400 mt-2 underline"
+              className="text-xs text-slate-400 mt-2 underline block mx-auto"
             >
               {showAdmin ? '關閉管理後台' : '管理員入口'}
             </button>
           </header>
 
           {showAdmin && (
-            <div className="bg-amber-50 border border-amber-200 p-4 rounded-xl mb-6">
+            <div className="bg-amber-50 border border-amber-200 p-4 rounded-xl mb-6 space-y-3">
               {!isAdmin ? (
                 <div className="flex gap-2">
                   <input 
@@ -236,11 +267,22 @@
                   <button onClick={handleAdminLogin} className="bg-amber-600 text-white px-3 text-sm rounded">登入</button>
                 </div>
               ) : (
-                <div>
-                  <div className="flex justify-between items-center mb-2">
+                <div className="space-y-2">
+                  <div className="flex justify-between items-center">
                     <h3 className="font-bold text-amber-900">管理員模式已啟用</h3>
                     <span className="text-xs text-amber-700 bg-amber-200 px-2 py-0.5 rounded">點擊座位/車長可新增、修改或刪除</span>
                   </div>
+                  
+                  {/* 開放 / 關閉切換按鈕 */}
+                  <button 
+                    onClick={toggleSystemOpen}
+                    className={`w-full py-2.5 rounded text-xs font-bold text-white shadow transition-all ${
+                      isOpen ? 'bg-rose-600 hover:bg-rose-700' : 'bg-emerald-600 hover:bg-emerald-700'
+                    }`}
+                  >
+                    {isOpen ? '🔒 關閉抽籤系統' : '🔓 開放抽籤系統'}
+                  </button>
+
                   <button onClick={handleReset} className="w-full bg-red-500 hover:bg-red-600 text-white text-xs py-2 rounded font-bold">
                     清空重置交通車所有座位
                   </button>
@@ -256,23 +298,25 @@
                 <div className="grid grid-cols-2 gap-2">
                   <button
                     type="button"
+                    disabled={!isOpen}
                     onClick={() => setLocation('donghu')}
                     className={`py-3 px-3 text-sm rounded-lg font-bold border transition-all ${
                       location === 'donghu' 
                         ? 'bg-blue-600 text-white border-blue-600 shadow' 
                         : 'bg-slate-50 text-slate-700 border-slate-300 hover:bg-slate-100'
-                    }`}
+                    } ${!isOpen && 'opacity-60 cursor-not-allowed'}`}
                   >
                     🏢 東湖宿舍
                   </button>
                   <button
                     type="button"
+                    disabled={!isOpen}
                     onClick={() => setLocation('other')}
                     className={`py-3 px-3 text-sm rounded-lg font-bold border transition-all ${
                       location === 'other' 
                         ? 'bg-blue-600 text-white border-blue-600 shadow' 
                         : 'bg-slate-50 text-slate-700 border-slate-300 hover:bg-slate-100'
-                    }`}
+                    } ${!isOpen && 'opacity-60 cursor-not-allowed'}`}
                   >
                     🚏 其他站
                   </button>
@@ -286,17 +330,17 @@
                   value={name} 
                   onChange={e => setName(e.target.value)} 
                   placeholder="例如：張小明"
-                  disabled={isDrawing}
-                  className="w-full p-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  disabled={isDrawing || !isOpen}
+                  className="w-full p-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-slate-100 disabled:cursor-not-allowed"
                 />
               </div>
 
               <button 
                 onClick={handleDraw} 
-                disabled={isDrawing || !name.trim() || !location}
+                disabled={isDrawing || !name.trim() || !location || !isOpen}
                 className="w-full bg-blue-600 hover:bg-blue-700 text-white py-2.5 rounded-lg font-bold disabled:bg-slate-300 disabled:cursor-not-allowed shadow transition-all mt-2"
               >
-                {isDrawing ? '抽籤中...' : '開始抽籤'}
+                {!isOpen ? '暫未開放抽籤' : isDrawing ? '抽籤中...' : '開始抽籤'}
               </button>
             </div>
           ) : (
