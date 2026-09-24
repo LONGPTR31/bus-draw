@@ -118,21 +118,23 @@
 
       const mySeat = currentUser ? Object.keys(assignedSeats).find(seat => assignedSeats[seat] === currentUser) : null;
 
-      // 計算各站劃分區域座位集 (以供顏色標示與抽籤)
+      // 【劃位演算法核心修改】
+      // 雙人座結構：[靠窗位 (x-1 / x-2), 走道位 (x-3 / x-4)]
       const calculateSeatZones = () => {
         const targetOther = Math.max(0, Number(otherCount) || 0);
 
+        // 每對雙人座定義：[靠窗位, 走道位]
         const SEAT_PAIRS = [
-          ['1-1', '1-3'],
-          ['2-1', '2-3'], ['2-4', '2-2'],
-          ['3-1', '3-3'], ['3-4', '3-2'],
-          ['4-1', '4-3'], ['4-4', '4-2'],
-          ['5-1', '5-3'], ['5-4', '5-2'],
-          ['6-1', '6-3'], ['6-4', '6-2'],
-          ['7-4', '7-2'],
-          ['8-4', '8-2'],
-          ['9-4', '9-2'],
-          ['10-4', '10-2']
+          ['1-1', '1-3'], // [靠窗, 走道]
+          ['2-1', '2-3'], ['2-2', '2-4'],
+          ['3-1', '3-3'], ['3-2', '3-4'],
+          ['4-1', '4-3'], ['4-2', '4-4'],
+          ['5-1', '5-3'], ['5-2', '5-4'],
+          ['6-1', '6-3'], ['6-2', '6-4'],
+          ['7-2', '7-4'],
+          ['8-2', '8-4'],
+          ['9-2', '9-4'],
+          ['10-2', '10-4']
         ];
 
         const otherSoloNeeded = Math.ceil(targetOther / 5);
@@ -142,28 +144,37 @@
         let otherBlockedSeats = [];
         let pairIndex = 0;
 
+        // 1. 分配獨立座位（其他站拿走道位，釋出靠窗位給東湖宿舍）
         let soloAssigned = 0;
         while (soloAssigned < otherSoloNeeded && pairIndex < SEAT_PAIRS.length) {
-          const pair = SEAT_PAIRS[pairIndex];
-          otherPool.push(pair[0]);
-          if (pair[1]) otherBlockedSeats.push(pair[1]);
+          const [windowSeat, aisleSeat] = SEAT_PAIRS[pairIndex];
+          // 其他站安排在走道位 (aisleSeat)
+          otherPool.push(aisleSeat);
+          // 靠窗位 (windowSeat) 保留/釋出給東湖宿舍區
           soloAssigned++;
           pairIndex++;
         }
 
+        // 2. 處理雙人座混坐情況（若發生跨區混坐，東湖宿舍分配靠窗位 [x-1/x-2]，其他站分配走道位 [x-3/x-4]）
         let pairSeatsAssigned = 0;
         while (pairSeatsAssigned < otherPairSeatsNeeded && pairIndex < SEAT_PAIRS.length) {
-          const pair = SEAT_PAIRS[pairIndex];
-          for (let seat of pair) {
-            if (pairSeatsAssigned < otherPairSeatsNeeded) {
-              otherPool.push(seat);
-              pairSeatsAssigned++;
-            }
+          const [windowSeat, aisleSeat] = SEAT_PAIRS[pairIndex];
+          
+          if (pairSeatsAssigned < otherPairSeatsNeeded) {
+            // 第一位先安排在走道位
+            otherPool.push(aisleSeat);
+            pairSeatsAssigned++;
+          }
+          if (pairSeatsAssigned < otherPairSeatsNeeded) {
+            // 若該雙人座全部劃給其他站，才拿靠窗位
+            otherPool.push(windowSeat);
+            pairSeatsAssigned++;
           }
           pairIndex++;
         }
 
         const allUsedByOther = [...otherPool, ...otherBlockedSeats];
+        // 東湖宿舍區取得所有非其他站說占用的座位（會優先包含被釋出的靠窗位）
         const donghuPool = ALL_DRAWABLE_SEATS.filter(s => !allUsedByOther.includes(s));
 
         return { otherPool, donghuPool };
@@ -265,7 +276,7 @@
           otherCount: o,
           donghuCount: d
         }, { merge: true })
-          .then(() => alert(`設定已更新！\n其他站人數：${o} 人 (釋出 ${Math.ceil(o/5)} 個獨立位)\n東湖宿舍人數：${d} 人`))
+          .then(() => alert(`設定已更新！\n其他站人數：${o} 人 (混坐時東湖優先靠窗 x-1/x-2)\n東湖宿舍人數：${d} 人`))
           .catch(() => alert('設定更新失敗！'));
       };
 
@@ -325,7 +336,7 @@
                       location === 'donghu' ? 'bg-emerald-600 text-white border-emerald-600 shadow' : 'bg-slate-50 text-slate-700 border-slate-300 hover:bg-slate-100'
                     } ${!isOpen && 'opacity-60 cursor-not-allowed'}`}
                   >
-                    🏢 東湖宿舍 (綠色區)
+                    🏢 東湖宿舍 (綠色靠窗優先)
                   </button>
                   <button
                     type="button"
@@ -552,10 +563,8 @@
       const isMine = mySeat === id;
       const isTaken = !!passengerName;
 
-      // 預設樣式
       let style = "bg-slate-50 border-slate-300 text-slate-700";
 
-      // 區域顏色設定（未被選走且非動畫中）
       if (!isTaken && !isAnim && !isMine) {
         if (isOtherZone) {
           style = "bg-blue-50 border-2 border-blue-400 text-blue-900";
