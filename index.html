@@ -313,16 +313,28 @@
     function SeatBox({ id, type, label, name, isAnim, mySeat, isAdmin, onAdminClick }) {
       if (type === 'driver') {
         const driverName = name || '';
+        const isTaken = !!driverName;
+        
+        let driverStyle = "bg-gray-200 text-gray-600 border-gray-300";
+        if (isAdmin) {
+          driverStyle = isTaken 
+            ? "bg-amber-100 border-amber-400 text-amber-900 cursor-pointer hover:bg-amber-200" 
+            : "bg-indigo-50 border-indigo-300 text-indigo-800 cursor-pointer hover:bg-indigo-100 border-dashed border-2";
+        } else if (isTaken) {
+          driverStyle = "bg-indigo-100 border-indigo-300 text-indigo-900";
+        }
+
         return (
           <div 
             onClick={() => isAdmin && onAdminClick(id, driverName)}
-            title={isAdmin ? "點擊編輯車長姓名" : ""}
-            className={`w-full h-12 border rounded flex flex-col items-center justify-center text-xs font-bold transition-all ${
-              isAdmin ? 'cursor-pointer hover:bg-gray-300 border-gray-400' : ''
-            } ${driverName ? 'bg-indigo-100 border-indigo-300 text-indigo-900' : 'bg-gray-200 text-gray-600'}`}
+            title={isAdmin ? (isTaken ? "點擊修改或刪除車長姓名" : "點擊手動安排車長") : ""}
+            className={`w-full h-12 border rounded flex flex-col items-center justify-center text-xs font-bold transition-all ${driverStyle}`}
           >
-            <span>{label}</span>
-            <span className="text-[10px] text-indigo-700 font-semibold">{driverName ? `(${driverName})` : ''}</span>
+            <span className="font-semibold">{label}</span>
+            <span className="text-[10px] truncate max-w-full px-1">
+              {driverName ? `(${driverName})` : ''}
+              {isAdmin && <span className="text-[8px] block text-amber-700">{isTaken ? '✏️修改' : '➕手動'}</span>}
+            </span>
           </div>
         );
       }
