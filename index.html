@@ -50,10 +50,15 @@
       { row: 11, seats: [{ id: '11-1', type: 'free', label: '11-1\n自由座' }, { id: '11-3', type: 'free', label: '11-3\n自由座' }, { id: '11-4', type: 'free', label: '11-4\n自由座' }, { id: '11-2', type: 'free', label: '11-2\n自由座' }] }
     ];
 
-    const DRAWABLE_SEATS = [
+    // 其他站上車（1~3排）
+    const OTHER_STATIONS_SEATS = [
       '1-1', '1-3',
       '2-1', '2-3', '2-4', '2-2',
-      '3-1', '3-3', '3-4', '3-2',
+      '3-1', '3-3', '3-4', '3-2'
+    ];
+
+    // 東湖宿舍上車（4~10排）
+    const DONGHU_DORM_SEATS = [
       '4-1', '4-3', '4-4', '4-2',
       '5-1', '5-3', '5-4', '5-2',
       '6-1', '6-3', '6-4', '6-2',
@@ -65,6 +70,7 @@
 
     function App() {
       const [name, setName] = React.useState('');
+      const [location, setLocation] = React.useState(''); // 上車地點
       const [assignedSeats, setAssignedSeats] = React.useState({});
       const [currentUser, setCurrentUser] = React.useState(null);
       const [isDrawing, setIsDrawing] = React.useState(false);
@@ -89,8 +95,10 @@
       const mySeat = currentUser ? Object.keys(assignedSeats).find(seat => assignedSeats[seat] === currentUser) : null;
 
       const handleDraw = async () => {
-        if (!name.trim()) return alert('請輸入您的姓名！');
         const trimmedName = name.trim();
+        if (!trimmedName) return alert('請輸入您的姓名！');
+        if (!location) return alert('請選擇您的上車地點！');
+
         const existingSeat = Object.keys(assignedSeats).find(seat => assignedSeats[seat] === trimmedName);
         if (existingSeat) {
           setCurrentUser(trimmedName);
@@ -98,9 +106,17 @@
           return alert(`您已經抽過座位了，您的交通車座位是：${existingSeat}`);
         }
 
+        const confirmText = `【確認資料】\n姓名：${trimmedName}\n上車地點：${location === 'donghu' ? '東湖宿舍（第4~10排）' : '其他站（第1~3排）'}\n\n請確認以上資料是否正確？`;
+        if (!confirm(confirmText)) return;
+
+        const targetSeats = location === 'donghu' ? DONGHU_DORM_SEATS : OTHER_STATIONS_SEATS;
         const occupiedSeats = Object.keys(assignedSeats);
-        const availableSeats = DRAWABLE_SEATS.filter(seat => !occupiedSeats.includes(seat));
-        if (availableSeats.length === 0) return alert('抱歉，交通車所有可抽座位均已額滿！');
+        const availableSeats = targetSeats.filter(seat => !occupiedSeats.includes(seat));
+
+        if (availableSeats.length === 0) {
+          const zoneName = location === 'donghu' ? '東湖宿舍（第4~10排）' : '其他站（第1~3排）';
+          return alert(`抱歉，【${zoneName}】的所有可抽座位均已額滿！`);
+        }
 
         setIsDrawing(true);
         let counter = 0;
@@ -134,7 +150,6 @@
         }
       };
 
-      // 切換/關閉管理員後台時，自動登出重置權限
       const toggleAdmin = () => {
         if (showAdmin) {
           setShowAdmin(false);
@@ -145,7 +160,6 @@
         }
       };
 
-      // 管理員點擊座位處理（新增/修改/刪除，包含車長與一般座位）
       const handleAdminSeatClick = (seatId, currentName) => {
         if (!isAdmin) return;
 
@@ -153,25 +167,20 @@
         const labelText = isDriver ? '車長座位' : `座位 ${seatId}`;
 
         if (currentName) {
-          // 已有人的座位：詢問修改或刪除
           const action = prompt(`【管理員編輯 - ${labelText}】\n目前設定：${currentName}\n\n請選擇操作：\n1. 輸入「新姓名」直接修改\n2. 輸入「0」或留空刪除紀錄\n3. 點擊「取消」不變更`, currentName);
-          
-          if (action === null) return; // 點擊取消
+          if (action === null) return;
           
           const trimmedAction = action.trim();
           if (trimmedAction === '' || trimmedAction === '0') {
-            // 刪除劃位
             db.collection('seats').doc(seatId).delete()
               .then(() => alert(`已清除 ${labelText} 的資料！`))
               .catch(() => alert('清除失敗！'));
           } else {
-            // 修改姓名
             db.collection('seats').doc(seatId).set({ passengerName: trimmedAction })
               .then(() => alert(`${labelText} 已更新為：${trimmedAction}`))
               .catch(() => alert('更新失敗！'));
           }
         } else {
-          // 空座位：手動指定人員/車長
           const newName = prompt(`【管理員新增 - ${labelText}】\n請輸入姓名：`);
           if (newName && newName.trim()) {
             db.collection('seats').doc(seatId).set({ passengerName: newName.trim() })
@@ -231,25 +240,56 @@
           )}
 
           {!mySeat ? (
-            <div className="bg-white p-4 rounded-xl shadow-md mb-6">
-              <label className="block text-sm font-medium text-slate-700 mb-2">請輸入您的姓名抽交通車座位：</label>
-              <div className="flex gap-2">
+            <div className="bg-white p-4 rounded-xl shadow-md mb-6 space-y-3">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">1. 請選擇上車地點 <span className="text-red-500">*</span></label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setLocation('donghu')}
+                    className={`py-2 px-3 text-sm rounded-lg font-bold border transition-all ${
+                      location === 'donghu' 
+                        ? 'bg-blue-600 text-white border-blue-600 shadow' 
+                        : 'bg-slate-50 text-slate-700 border-slate-300 hover:bg-slate-100'
+                    }`}
+                  >
+                    🏢 東湖宿舍
+                    <span className="block text-[10px] font-normal opacity-90">(抽第 4~10 排)</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setLocation('other')}
+                    className={`py-2 px-3 text-sm rounded-lg font-bold border transition-all ${
+                      location === 'other' 
+                        ? 'bg-blue-600 text-white border-blue-600 shadow' 
+                        : 'bg-slate-50 text-slate-700 border-slate-300 hover:bg-slate-100'
+                    }`}
+                  >
+                    🚏 其他站
+                    <span className="block text-[10px] font-normal opacity-90">(抽第 1~3 排)</span>
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">2. 請輸入姓名 <span className="text-red-500">*</span></label>
                 <input 
                   type="text" 
                   value={name} 
                   onChange={e => setName(e.target.value)} 
                   placeholder="例如：張小明"
                   disabled={isDrawing}
-                  className="flex-1 p-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full p-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
-                <button 
-                  onClick={handleDraw} 
-                  disabled={isDrawing}
-                  className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 rounded-lg font-bold disabled:bg-slate-300"
-                >
-                  {isDrawing ? '抽籤中...' : '開始抽籤'}
-                </button>
               </div>
+
+              <button 
+                onClick={handleDraw} 
+                disabled={isDrawing || !name.trim() || !location}
+                className="w-full bg-blue-600 hover:bg-blue-700 text-white py-2.5 rounded-lg font-bold disabled:bg-slate-300 disabled:cursor-not-allowed shadow transition-all mt-2"
+              >
+                {isDrawing ? '抽籤中...' : '開始抽籤'}
+              </button>
             </div>
           ) : (
             <div className="bg-emerald-500 text-white p-4 rounded-xl shadow-md mb-6 text-center">
@@ -267,7 +307,6 @@
 
             <div className="space-y-2">
               {SEAT_LAYOUT.slice(1).map((row) => {
-                // 安全門區域與第 9, 10 排處理
                 if (row.row === 9) {
                   return (
                     <div key="row-9-10" className="flex justify-between gap-2 items-stretch">
