@@ -134,6 +134,17 @@
         }
       };
 
+      // 切換/關閉管理員後台時，自動登出重置權限
+      const toggleAdmin = () => {
+        if (showAdmin) {
+          setShowAdmin(false);
+          setIsAdmin(false);
+          setAdminPassword('');
+        } else {
+          setShowAdmin(true);
+        }
+      };
+
       // 管理員點擊座位處理（新增/修改/刪除，包含車長與一般座位）
       const handleAdminSeatClick = (seatId, currentName) => {
         if (!isAdmin) return;
@@ -185,7 +196,7 @@
           <header className="text-center mb-6 bg-white p-4 rounded-xl shadow-md">
             <h1 className="text-2xl font-bold text-slate-800">🚌 交通車座位抽籤</h1>
             <button 
-              onClick={() => setShowAdmin(!showAdmin)}
+              onClick={toggleAdmin}
               className="text-xs text-slate-400 mt-2 underline"
             >
               {showAdmin ? '關閉管理後台' : '管理員入口'}
