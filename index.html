@@ -150,11 +150,12 @@
 
         setIsDrawing(true);
         let counter = 0;
+        // 每 0.2 秒 (200 毫秒) 跳動一次，共跳動 20 次
         const interval = setInterval(() => {
           const tempSeat = availableSeats[Math.floor(Math.random() * availableSeats.length)];
           setAnimatingSeat(tempSeat);
           counter++;
-          if (counter > 15) {
+          if (counter >= 20) {
             clearInterval(interval);
             const finalSeat = availableSeats[Math.floor(Math.random() * availableSeats.length)];
             db.collection('seats').doc(finalSeat).set({ passengerName: trimmedName })
@@ -169,7 +170,7 @@
                 setIsDrawing(false);
               });
           }
-        }, 100);
+        }, 200);
       };
 
       const handleAdminLogin = () => {
