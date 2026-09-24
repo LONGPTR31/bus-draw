@@ -18,7 +18,7 @@
   <div id="root"></div>
 
   <script type="text/babel">
-    // Firebase Configuration
+    // 帶入您的真實 Firebase 金鑰
     const firebaseConfig = {
       apiKey: "AIzaSyDl1q7RLHwyuJT42iBT6815zRBkTgBCy40",
       authDomain: "bus-seat-draw.firebaseapp.com",
@@ -29,7 +29,7 @@
       measurementId: "G-K4QEHJSSNL"
     };
 
-    // Initialize Firebase
+    // 初始化 Firebase
     if (!firebase.apps.length) {
       firebase.initializeApp(firebaseConfig);
     }
@@ -134,13 +134,36 @@
         }
       };
 
-      // 刪除單一座位紀錄
-      const handleDeleteSeat = (seatId, passengerName) => {
+      // 管理員點擊座位處理（新增/修改/刪除）
+      const handleAdminSeatClick = (seatId, currentName) => {
         if (!isAdmin) return;
-        if (confirm(`【管理員操作】\n確定要刪除座位 ${seatId} (${passengerName}) 的劃位紀錄嗎？`)) {
-          db.collection('seats').doc(seatId).delete()
-            .then(() => alert(`已成功清除座位 ${seatId}！`))
-            .catch(err => alert('刪除失敗，請重試！'));
+
+        if (currentName) {
+          // 已有人的座位：詢問修改或刪除
+          const action = prompt(`【管理員編輯 - 座位 ${seatId}】\n目前劃位人：${currentName}\n\n請選擇操作：\n1. 輸入「新姓名」直接修改\n2. 輸入「0」或留空刪除劃位\n3. 點擊「取消」不變更`, currentName);
+          
+          if (action === null) return; // 點擊取消
+          
+          const trimmedAction = action.trim();
+          if (trimmedAction === '' || trimmedAction === '0') {
+            // 刪除劃位
+            db.collection('seats').doc(seatId).delete()
+              .then(() => alert(`已清除座位 ${seatId} 的劃位！`))
+              .catch(() => alert('清除失敗！'));
+          } else {
+            // 修改姓名
+            db.collection('seats').doc(seatId).set({ passengerName: trimmedAction })
+              .then(() => alert(`座位 ${seatId} 已更新為：${trimmedAction}`))
+              .catch(() => alert('更新失敗！'));
+          }
+        } else {
+          // 空座位：手動手動指定人員
+          const newName = prompt(`【管理員新增 - 座位 ${seatId}】\n請輸入要安排至此座位的乘客姓名：`);
+          if (newName && newName.trim()) {
+            db.collection('seats').doc(seatId).set({ passengerName: newName.trim() })
+              .then(() => alert(`已成功手動把 ${newName.trim()} 安排在座位 ${seatId}！`))
+              .catch(() => alert('設定失敗！'));
+          }
         }
       };
 
@@ -183,7 +206,7 @@
                 <div>
                   <div className="flex justify-between items-center mb-2">
                     <h3 className="font-bold text-amber-900">管理員模式已啟用</h3>
-                    <span className="text-xs text-amber-700 bg-amber-200 px-2 py-0.5 rounded">點擊已劃位座位可單獨刪除</span>
+                    <span className="text-xs text-amber-700 bg-amber-200 px-2 py-0.5 rounded">點擊任一座位可手動新增/修改/刪除</span>
                   </div>
                   <button onClick={handleReset} className="w-full bg-red-500 hover:bg-red-600 text-white text-xs py-2 rounded font-bold">
                     清空重置交通車所有座位
@@ -230,24 +253,21 @@
 
             <div className="space-y-2">
               {SEAT_LAYOUT.slice(1).map((row) => {
-                // 安全門區域與第 9, 10 排對齊處理
+                // 安全門區域與第 9, 10 排處理
                 if (row.row === 9) {
                   return (
                     <div key="row-9-10" className="flex justify-between gap-2 items-stretch">
-                      {/* 左側：安全門 */}
                       <div className="w-[48%] bg-amber-100 border-2 border-amber-400 rounded-lg flex items-center justify-center font-bold text-amber-800 text-center text-sm p-2">
                         🚨 安全門
                       </div>
-                      
-                      {/* 右側：第 9 排與第 10 排右側座位 */}
                       <div className="w-[48%] space-y-2">
                         <div className="flex gap-1">
-                          <SeatBox id="9-4" name={assignedSeats['9-4']} isAnim={animatingSeat === '9-4'} mySeat={mySeat} isAdmin={isAdmin} onDelete={handleDeleteSeat} />
-                          <SeatBox id="9-2" name={assignedSeats['9-2']} isAnim={animatingSeat === '9-2'} mySeat={mySeat} isAdmin={isAdmin} onDelete={handleDeleteSeat} />
+                          <SeatBox id="9-4" name={assignedSeats['9-4']} isAnim={animatingSeat === '9-4'} mySeat={mySeat} isAdmin={isAdmin} onAdminClick={handleAdminSeatClick} />
+                          <SeatBox id="9-2" name={assignedSeats['9-2']} isAnim={animatingSeat === '9-2'} mySeat={mySeat} isAdmin={isAdmin} onAdminClick={handleAdminSeatClick} />
                         </div>
                         <div className="flex gap-1">
-                          <SeatBox id="10-4" name={assignedSeats['10-4']} isAnim={animatingSeat === '10-4'} mySeat={mySeat} isAdmin={isAdmin} onDelete={handleDeleteSeat} />
-                          <SeatBox id="10-2" name={assignedSeats['10-2']} isAnim={animatingSeat === '10-2'} mySeat={mySeat} isAdmin={isAdmin} onDelete={handleDeleteSeat} />
+                          <SeatBox id="10-4" name={assignedSeats['10-4']} isAnim={animatingSeat === '10-4'} mySeat={mySeat} isAdmin={isAdmin} onAdminClick={handleAdminSeatClick} />
+                          <SeatBox id="10-2" name={assignedSeats['10-2']} isAnim={animatingSeat === '10-2'} mySeat={mySeat} isAdmin={isAdmin} onAdminClick={handleAdminSeatClick} />
                         </div>
                       </div>
                     </div>
@@ -259,12 +279,12 @@
                   <div key={row.row} className="flex justify-between gap-2">
                     <div className="flex gap-1 w-[48%]">
                       {row.seats.slice(0, 2).map(s => (
-                        <SeatBox key={s.id} {...s} name={assignedSeats[s.id]} isAnim={animatingSeat === s.id} mySeat={mySeat} isAdmin={isAdmin} onDelete={handleDeleteSeat} />
+                        <SeatBox key={s.id} {...s} name={assignedSeats[s.id]} isAnim={animatingSeat === s.id} mySeat={mySeat} isAdmin={isAdmin} onAdminClick={handleAdminSeatClick} />
                       ))}
                     </div>
                     <div className="flex gap-1 w-[48%] justify-end">
                       {row.seats.slice(2).map(s => (
-                        <SeatBox key={s.id} {...s} name={assignedSeats[s.id]} isAnim={animatingSeat === s.id} mySeat={mySeat} isAdmin={isAdmin} onDelete={handleDeleteSeat} />
+                        <SeatBox key={s.id} {...s} name={assignedSeats[s.id]} isAnim={animatingSeat === s.id} mySeat={mySeat} isAdmin={isAdmin} onAdminClick={handleAdminSeatClick} />
                       ))}
                     </div>
                   </div>
@@ -276,7 +296,7 @@
       );
     }
 
-    function SeatBox({ id, type, label, name, isAnim, mySeat, isAdmin, onDelete }) {
+    function SeatBox({ id, type, label, name, isAnim, mySeat, isAdmin, onAdminClick }) {
       if (type === 'driver') {
         return <div className="w-full h-12 bg-gray-200 border rounded flex items-center justify-center text-xs font-bold text-gray-600">{label}</div>;
       }
@@ -295,26 +315,28 @@
       else if (isMine) style = "bg-emerald-500 border-emerald-600 text-white font-bold ring-2 ring-emerald-300";
       else if (isTaken) {
         style = isAdmin 
-          ? "bg-amber-100 border-amber-400 text-amber-900 cursor-pointer hover:bg-red-100 hover:border-red-400 hover:text-red-700 transition-colors" 
+          ? "bg-amber-100 border-amber-400 text-amber-900 cursor-pointer hover:bg-amber-200 transition-colors" 
           : "bg-slate-300 border-slate-400 text-slate-600";
+      } else if (isAdmin) {
+        style += " cursor-pointer hover:bg-emerald-100 transition-colors border-dashed border-2";
       }
 
       const handleClick = () => {
-        if (isAdmin && isTaken) {
-          onDelete(id, name);
+        if (isAdmin) {
+          onAdminClick(id, name);
         }
       };
 
       return (
         <div 
           onClick={handleClick}
-          title={isAdmin && isTaken ? "點擊刪除此座位劃位" : ""}
+          title={isAdmin ? (isTaken ? "點擊修改或刪除此座位" : "點擊手動安排人員") : ""}
           className={`flex-1 h-12 border rounded flex flex-col items-center justify-center text-xs transition-all ${style}`}
         >
           <span className="font-semibold">{id}</span>
           <span className="text-[10px] truncate max-w-full px-1">
             {name || '可抽'}
-            {isAdmin && isTaken && <span className="text-[8px] block text-red-500">❌ 刪除</span>}
+            {isAdmin && <span className="text-[8px] block text-amber-700">{isTaken ? '✏️修改' : '➕手動'}</span>}
           </span>
         </div>
       );
