@@ -134,13 +134,16 @@
         }
       };
 
-      // 管理員點擊座位處理（新增/修改/刪除）
+      // 管理員點擊座位處理（新增/修改/刪除，包含車長與一般座位）
       const handleAdminSeatClick = (seatId, currentName) => {
         if (!isAdmin) return;
 
+        const isDriver = seatId === 'driver_seat';
+        const labelText = isDriver ? '車長座位' : `座位 ${seatId}`;
+
         if (currentName) {
           // 已有人的座位：詢問修改或刪除
-          const action = prompt(`【管理員編輯 - 座位 ${seatId}】\n目前劃位人：${currentName}\n\n請選擇操作：\n1. 輸入「新姓名」直接修改\n2. 輸入「0」或留空刪除劃位\n3. 點擊「取消」不變更`, currentName);
+          const action = prompt(`【管理員編輯 - ${labelText}】\n目前設定：${currentName}\n\n請選擇操作：\n1. 輸入「新姓名」直接修改\n2. 輸入「0」或留空刪除紀錄\n3. 點擊「取消」不變更`, currentName);
           
           if (action === null) return; // 點擊取消
           
@@ -148,20 +151,20 @@
           if (trimmedAction === '' || trimmedAction === '0') {
             // 刪除劃位
             db.collection('seats').doc(seatId).delete()
-              .then(() => alert(`已清除座位 ${seatId} 的劃位！`))
+              .then(() => alert(`已清除 ${labelText} 的資料！`))
               .catch(() => alert('清除失敗！'));
           } else {
             // 修改姓名
             db.collection('seats').doc(seatId).set({ passengerName: trimmedAction })
-              .then(() => alert(`座位 ${seatId} 已更新為：${trimmedAction}`))
+              .then(() => alert(`${labelText} 已更新為：${trimmedAction}`))
               .catch(() => alert('更新失敗！'));
           }
         } else {
-          // 空座位：手動手動指定人員
-          const newName = prompt(`【管理員新增 - 座位 ${seatId}】\n請輸入要安排至此座位的乘客姓名：`);
+          // 空座位：手動指定人員/車長
+          const newName = prompt(`【管理員新增 - ${labelText}】\n請輸入姓名：`);
           if (newName && newName.trim()) {
             db.collection('seats').doc(seatId).set({ passengerName: newName.trim() })
-              .then(() => alert(`已成功手動把 ${newName.trim()} 安排在座位 ${seatId}！`))
+              .then(() => alert(`已成功設定 ${newName.trim()} 為 ${labelText}！`))
               .catch(() => alert('設定失敗！'));
           }
         }
@@ -206,7 +209,7 @@
                 <div>
                   <div className="flex justify-between items-center mb-2">
                     <h3 className="font-bold text-amber-900">管理員模式已啟用</h3>
-                    <span className="text-xs text-amber-700 bg-amber-200 px-2 py-0.5 rounded">點擊任一座位可手動新增/修改/刪除</span>
+                    <span className="text-xs text-amber-700 bg-amber-200 px-2 py-0.5 rounded">點擊座位/車長可新增、修改或刪除</span>
                   </div>
                   <button onClick={handleReset} className="w-full bg-red-500 hover:bg-red-600 text-white text-xs py-2 rounded font-bold">
                     清空重置交通車所有座位
@@ -298,7 +301,19 @@
 
     function SeatBox({ id, type, label, name, isAnim, mySeat, isAdmin, onAdminClick }) {
       if (type === 'driver') {
-        return <div className="w-full h-12 bg-gray-200 border rounded flex items-center justify-center text-xs font-bold text-gray-600">{label}</div>;
+        const driverName = name || '';
+        return (
+          <div 
+            onClick={() => isAdmin && onAdminClick(id, driverName)}
+            title={isAdmin ? "點擊編輯車長姓名" : ""}
+            className={`w-full h-12 border rounded flex flex-col items-center justify-center text-xs font-bold transition-all ${
+              isAdmin ? 'cursor-pointer hover:bg-gray-300 border-gray-400' : ''
+            } ${driverName ? 'bg-indigo-100 border-indigo-300 text-indigo-900' : 'bg-gray-200 text-gray-600'}`}
+          >
+            <span>{label}</span>
+            <span className="text-[10px] text-indigo-700 font-semibold">{driverName ? `(${driverName})` : ''}</span>
+          </div>
+        );
       }
       if (type === 'reserved') {
         return <div className="flex-1 h-12 bg-slate-200 border border-slate-300 rounded flex items-center justify-center text-[10px] text-center font-bold text-slate-500 whitespace-pre-line">{label}</div>;
