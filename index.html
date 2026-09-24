@@ -47,7 +47,17 @@
       { row: 8, seats: [{ id: '8-1', type: 'reserved', label: '8-1\n值班人員' }, { id: '8-3', type: 'reserved', label: '8-3\n值班人員' }, { id: '8-4' }, { id: '8-2' }] },
       { row: 9, seats: [{ id: 'safety_door', type: 'safety', label: '安全門' }, { id: '9-4' }, { id: '9-2' }] },
       { row: 10, seats: [{ id: '10-4' }, { id: '10-2' }] },
-      { row: 11, seats: [{ id: '11-1', type: 'free', label: '11-1\n自由座' }, { id: '11-3', type: 'free', label: '11-3\n自由座' }, { id: '11-4', type: 'free', label: '11-4\n自由座' }, { id: '11-2', type: 'free', label: '11-2\n自由座' }] }
+      { 
+        row: 11, 
+        isFullRow: true,
+        seats: [
+          { id: '11-1', type: 'free', label: '11-1\n自由座' },
+          { id: '11-3', type: 'free', label: '11-3\n自由座' },
+          { id: '11-5', type: 'free', label: '11-5\n自由座' },
+          { id: '11-4', type: 'free', label: '11-4\n自由座' },
+          { id: '11-2', type: 'free', label: '11-2\n自由座' }
+        ] 
+      }
     ];
 
     // 其他站上車（1~3排）
@@ -70,7 +80,7 @@
 
     function App() {
       const [name, setName] = React.useState('');
-      const [location, setLocation] = React.useState(''); // 上車地點
+      const [location, setLocation] = React.useState('');
       const [assignedSeats, setAssignedSeats] = React.useState({});
       const [currentUser, setCurrentUser] = React.useState(null);
       const [isDrawing, setIsDrawing] = React.useState(false);
@@ -305,6 +315,16 @@
 
             <div className="space-y-2">
               {SEAT_LAYOUT.slice(1).map((row) => {
+                if (row.isFullRow) {
+                  return (
+                    <div key={row.row} className="flex gap-1 w-full">
+                      {row.seats.map(s => (
+                        <SeatBox key={s.id} {...s} name={assignedSeats[s.id]} isAnim={animatingSeat === s.id} mySeat={mySeat} isAdmin={isAdmin} onAdminClick={handleAdminSeatClick} />
+                      ))}
+                    </div>
+                  );
+                }
+
                 if (row.row === 9) {
                   return (
                     <div key="row-9-10" className="flex justify-between gap-2 items-stretch">
