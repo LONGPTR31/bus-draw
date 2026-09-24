@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>遊覽車座位抽籤系統</title>
+  <title>東湖交通車座位抽籤系統</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <!-- React & ReactDOM -->
   <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
@@ -95,12 +95,12 @@
         if (existingSeat) {
           setCurrentUser(trimmedName);
           localStorage.setItem('bus_passenger_name', trimmedName);
-          return alert(`您已經抽過座位了，您的座位是：${existingSeat}`);
+          return alert(`您已經抽過座位了，您的東湖交通車座位是：${existingSeat}`);
         }
 
         const occupiedSeats = Object.keys(assignedSeats);
         const availableSeats = DRAWABLE_SEATS.filter(seat => !occupiedSeats.includes(seat));
-        if (availableSeats.length === 0) return alert('抱歉，所有可抽座位均已額滿！');
+        if (availableSeats.length === 0) return alert('抱歉，東湖交通車所有可抽座位均已額滿！');
 
         setIsDrawing(true);
         let counter = 0;
@@ -137,7 +137,7 @@
       // 刪除單一座位紀錄
       const handleDeleteSeat = (seatId, passengerName) => {
         if (!isAdmin) return;
-        if (confirm(`【管理員操作】\n確定要刪除座位 ${seatId} (${passengerName}) 的抽籤紀錄嗎？`)) {
+        if (confirm(`【管理員操作】\n確定要刪除座位 ${seatId} (${passengerName}) 的劃位紀錄嗎？`)) {
           db.collection('seats').doc(seatId).delete()
             .then(() => alert(`已成功清除座位 ${seatId}！`))
             .catch(err => alert('刪除失敗，請重試！'));
@@ -145,19 +145,19 @@
       };
 
       const handleReset = async () => {
-        if (confirm('【管理員操作】\n確定要清空「所有」抽籤紀錄嗎？此動作無法復原！')) {
+        if (confirm('【管理員操作】\n確定要清空「東湖交通車」所有抽籤紀錄嗎？此動作無法復原！')) {
           const snapshot = await db.collection('seats').get();
           const batch = db.batch();
           snapshot.docs.forEach(doc => batch.delete(doc.ref));
           await batch.commit();
-          alert('所有座位紀錄已清空！');
+          alert('東湖交通車所有座位紀錄已清空！');
         }
       };
 
       return (
         <div className="max-w-md mx-auto p-4 pb-20">
           <header className="text-center mb-6 bg-white p-4 rounded-xl shadow-md">
-            <h1 className="text-2xl font-bold text-slate-800">遊覽車座位抽籤</h1>
+            <h1 className="text-2xl font-bold text-slate-800">🚌 東湖交通車座位抽籤</h1>
             <button 
               onClick={() => setShowAdmin(!showAdmin)}
               className="text-xs text-slate-400 mt-2 underline"
@@ -186,7 +186,7 @@
                     <span className="text-xs text-amber-700 bg-amber-200 px-2 py-0.5 rounded">點擊已劃位座位可單獨刪除</span>
                   </div>
                   <button onClick={handleReset} className="w-full bg-red-500 hover:bg-red-600 text-white text-xs py-2 rounded font-bold">
-                    清空重置所有座位資料
+                    清空重置東湖交通車所有座位
                   </button>
                 </div>
               )}
@@ -195,7 +195,7 @@
 
           {!mySeat ? (
             <div className="bg-white p-4 rounded-xl shadow-md mb-6">
-              <label className="block text-sm font-medium text-slate-700 mb-2">請輸入您的姓名進行抽籤：</label>
+              <label className="block text-sm font-medium text-slate-700 mb-2">請輸入您的姓名抽東湖交通車座位：</label>
               <div className="flex gap-2">
                 <input 
                   type="text" 
@@ -217,15 +217,15 @@
           ) : (
             <div className="bg-emerald-500 text-white p-4 rounded-xl shadow-md mb-6 text-center">
               <p className="text-sm">恭喜！{currentUser}</p>
-              <p className="text-2xl font-black mt-1">您的座位：{mySeat}</p>
+              <p className="text-2xl font-black mt-1">您的東湖交通車座位：{mySeat}</p>
             </div>
           )}
 
           {/* 車體地圖 */}
           <div className="bg-white p-4 rounded-2xl shadow-xl border-2 border-slate-300">
             <div className="flex justify-between items-center bg-slate-800 text-white py-2 px-4 rounded-lg mb-4 text-center font-bold">
-              <span>駕駛員 🚘</span>
-              <span className="text-xs bg-slate-700 px-2 py-1 rounded">走道</span>
+              <span>司機駕駛 🚘</span>
+              <span className="text-xs bg-slate-700 px-2 py-1 rounded">東湖交通車走道</span>
               <span>車門 🚪</span>
             </div>
 
