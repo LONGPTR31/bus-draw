@@ -58,7 +58,6 @@
       }
     ];
 
-    // 按車頭至車尾順序排列的所有可抽座位（自動排除了車長席、值班席、安全門、自由座）
     const ALL_DRAWABLE_SEATS = [
       '1-1', '1-3',
       '2-1', '2-3', '2-4', '2-2',
@@ -84,7 +83,6 @@
       const [isAdmin, setIsAdmin] = React.useState(false);
       const [isOpen, setIsOpen] = React.useState(false);
 
-      // 動態人數設定（預設 其他站 9 人，東湖 10 人）
       const [otherCount, setOtherCount] = React.useState(9);
       const [donghuCount, setDonghuCount] = React.useState(10);
 
@@ -120,12 +118,10 @@
 
       const mySeat = currentUser ? Object.keys(assignedSeats).find(seat => assignedSeats[seat] === currentUser) : null;
 
-      // 全動態「鄰座鎖定」劃分演算法
-      const getSeatsPool = (loc, occupied) => {
+      // 計算各站劃分區域座位集 (以供顏色標示與抽籤)
+      const calculateSeatZones = () => {
         const targetOther = Math.max(0, Number(otherCount) || 0);
-        const targetDonghu = Math.max(0, Number(donghuCount) || 0);
 
-        // 雙人對照組：用於精準鎖定鄰座
         const SEAT_PAIRS = [
           ['1-1', '1-3'],
           ['2-1', '2-3'], ['2-4', '2-2'],
@@ -139,25 +135,22 @@
           ['10-4', '10-2']
         ];
 
-        // 1. 計算獨立位數 (5:1) 與雙人座人數
         const otherSoloNeeded = Math.ceil(targetOther / 5);
         const otherPairSeatsNeeded = targetOther - otherSoloNeeded;
 
         let otherPool = [];
-        let otherBlockedSeats = []; // 鎖定不放進抽籤池的鄰座
+        let otherBlockedSeats = [];
         let pairIndex = 0;
 
-        // 2. 自動分配獨立位（取1位，鎖定鄰座）
         let soloAssigned = 0;
         while (soloAssigned < otherSoloNeeded && pairIndex < SEAT_PAIRS.length) {
           const pair = SEAT_PAIRS[pairIndex];
           otherPool.push(pair[0]);
-          if (pair[1]) otherBlockedSeats.push(pair[1]); // 強制空出旁邊位置
+          if (pair[1]) otherBlockedSeats.push(pair[1]);
           soloAssigned++;
           pairIndex++;
         }
 
-        // 3. 自動分配雙人座（補齊其餘人數）
         let pairSeatsAssigned = 0;
         while (pairSeatsAssigned < otherPairSeatsNeeded && pairIndex < SEAT_PAIRS.length) {
           const pair = SEAT_PAIRS[pairIndex];
@@ -170,14 +163,19 @@
           pairIndex++;
         }
 
-        // 4. 東湖宿舍使用剩餘所有未被佔用且未被鎖定的座位
         const allUsedByOther = [...otherPool, ...otherBlockedSeats];
-        const donghuBasePool = ALL_DRAWABLE_SEATS.filter(s => !allUsedByOther.includes(s));
+        const donghuPool = ALL_DRAWABLE_SEATS.filter(s => !allUsedByOther.includes(s));
 
+        return { otherPool, donghuPool };
+      };
+
+      const { otherPool, donghuPool } = calculateSeatZones();
+
+      const getSeatsPool = (loc, occupied) => {
         if (loc === 'other') {
           return otherPool.filter(s => !occupied.includes(s));
         } else {
-          let available = donghuBasePool.filter(s => !occupied.includes(s));
+          let available = donghuPool.filter(s => !occupied.includes(s));
           if (available.length === 0) {
             available = ALL_DRAWABLE_SEATS.filter(s => !occupied.includes(s) && !otherPool.includes(s));
           }
@@ -267,7 +265,7 @@
           otherCount: o,
           donghuCount: d
         }, { merge: true })
-          .then(() => alert(`設定已更新！\n其他站人數：${o} 人 (動態鎖定釋出 ${Math.ceil(o/5)} 個獨立位)\n東湖宿舍人數：${d} 人`))
+          .then(() => alert(`設定已更新！\n其他站人數：${o} 人 (釋出 ${Math.ceil(o/5)} 個獨立位)\n東湖宿舍人數：${d} 人`))
           .catch(() => alert('設定更新失敗！'));
       };
 
@@ -277,7 +275,7 @@
         const labelText = isDriver ? '車長座位' : `座位 ${seatId}`;
 
         if (currentName) {
-          const action = prompt(`【管理員編輯 - ${labelText}】\n目前設定：${currentName}\n\n請選擇操作：\n1. 輸入「新姓名」直接修改\n2. 輸入「0」或留空刪除紀錄\n3. 點擊「取消」不變更`, currentName);
+          const action = prompt(`【管理員編輯 - ${labelText}】\n目前乘客：${currentName}\n\n請選擇操作：\n1. 輸入「新姓名」直接修改姓名\n2. 輸入「0」或留空刪除紀錄`, currentName);
           if (action === null) return;
           const trimmedAction = action.trim();
           if (trimmedAction === '' || trimmedAction === '0') {
@@ -324,10 +322,10 @@
                     disabled={!isOpen}
                     onClick={() => setLocation('donghu')}
                     className={`py-3 px-3 text-sm rounded-lg font-bold border transition-all ${
-                      location === 'donghu' ? 'bg-blue-600 text-white border-blue-600 shadow' : 'bg-slate-50 text-slate-700 border-slate-300 hover:bg-slate-100'
+                      location === 'donghu' ? 'bg-emerald-600 text-white border-emerald-600 shadow' : 'bg-slate-50 text-slate-700 border-slate-300 hover:bg-slate-100'
                     } ${!isOpen && 'opacity-60 cursor-not-allowed'}`}
                   >
-                    🏢 東湖宿舍
+                    🏢 東湖宿舍 (綠色區)
                   </button>
                   <button
                     type="button"
@@ -337,7 +335,7 @@
                       location === 'other' ? 'bg-blue-600 text-white border-blue-600 shadow' : 'bg-slate-50 text-slate-700 border-slate-300 hover:bg-slate-100'
                     } ${!isOpen && 'opacity-60 cursor-not-allowed'}`}
                   >
-                    🚏 其他站
+                    🚏 其他站 (藍色區)
                   </button>
                 </div>
               </div>
@@ -369,6 +367,18 @@
             </div>
           )}
 
+          {/* 區域圖例說明 */}
+          <div className="bg-white p-3 rounded-xl shadow-md mb-4 flex justify-around text-xs font-bold text-slate-700">
+            <div className="flex items-center gap-1.5">
+              <span className="w-3.5 h-3.5 rounded bg-blue-100 border-2 border-blue-500 inline-block"></span>
+              <span>其他站區域 (藍色)</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="w-3.5 h-3.5 rounded bg-emerald-100 border-2 border-emerald-500 inline-block"></span>
+              <span>東湖宿舍區域 (綠色)</span>
+            </div>
+          </div>
+
           {/* 車體地圖 */}
           <div className="bg-white p-4 rounded-2xl shadow-xl border-2 border-slate-300 mb-6">
             <div className="flex justify-between items-center bg-slate-800 text-white py-2 px-4 rounded-lg mb-4 text-center font-bold">
@@ -382,7 +392,7 @@
                   return (
                     <div key={row.row} className="flex gap-1 w-full">
                       {row.seats.map(s => (
-                        <SeatBox key={s.id} {...s} name={assignedSeats[s.id]} isAnim={animatingSeat === s.id} mySeat={mySeat} isAdmin={isAdmin} onAdminClick={handleAdminSeatClick} />
+                        <SeatBox key={s.id} {...s} passengerName={assignedSeats[s.id]} isAnim={animatingSeat === s.id} mySeat={mySeat} isAdmin={isAdmin} onAdminClick={handleAdminSeatClick} isOtherZone={otherPool.includes(s.id)} isDonghuZone={donghuPool.includes(s.id)} />
                       ))}
                     </div>
                   );
@@ -396,12 +406,12 @@
                       </div>
                       <div className="w-[48%] space-y-2">
                         <div className="flex gap-1">
-                          <SeatBox id="9-4" name={assignedSeats['9-4']} isAnim={animatingSeat === '9-4'} mySeat={mySeat} isAdmin={isAdmin} onAdminClick={handleAdminSeatClick} />
-                          <SeatBox id="9-2" name={assignedSeats['9-2']} isAnim={animatingSeat === '9-2'} mySeat={mySeat} isAdmin={isAdmin} onAdminClick={handleAdminSeatClick} />
+                          <SeatBox id="9-4" passengerName={assignedSeats['9-4']} isAnim={animatingSeat === '9-4'} mySeat={mySeat} isAdmin={isAdmin} onAdminClick={handleAdminSeatClick} isOtherZone={otherPool.includes('9-4')} isDonghuZone={donghuPool.includes('9-4')} />
+                          <SeatBox id="9-2" passengerName={assignedSeats['9-2']} isAnim={animatingSeat === '9-2'} mySeat={mySeat} isAdmin={isAdmin} onAdminClick={handleAdminSeatClick} isOtherZone={otherPool.includes('9-2')} isDonghuZone={donghuPool.includes('9-2')} />
                         </div>
                         <div className="flex gap-1">
-                          <SeatBox id="10-4" name={assignedSeats['10-4']} isAnim={animatingSeat === '10-4'} mySeat={mySeat} isAdmin={isAdmin} onAdminClick={handleAdminSeatClick} />
-                          <SeatBox id="10-2" name={assignedSeats['10-2']} isAnim={animatingSeat === '10-2'} mySeat={mySeat} isAdmin={isAdmin} onAdminClick={handleAdminSeatClick} />
+                          <SeatBox id="10-4" passengerName={assignedSeats['10-4']} isAnim={animatingSeat === '10-4'} mySeat={mySeat} isAdmin={isAdmin} onAdminClick={handleAdminSeatClick} isOtherZone={otherPool.includes('10-4')} isDonghuZone={donghuPool.includes('10-4')} />
+                          <SeatBox id="10-2" passengerName={assignedSeats['10-2']} isAnim={animatingSeat === '10-2'} mySeat={mySeat} isAdmin={isAdmin} onAdminClick={handleAdminSeatClick} isOtherZone={otherPool.includes('10-2')} isDonghuZone={donghuPool.includes('10-2')} />
                         </div>
                       </div>
                     </div>
@@ -413,12 +423,12 @@
                   <div key={row.row} className="flex justify-between gap-2">
                     <div className="flex gap-1 w-[48%]">
                       {row.seats.slice(0, 2).map(s => (
-                        <SeatBox key={s.id} {...s} name={assignedSeats[s.id]} isAnim={animatingSeat === s.id} mySeat={mySeat} isAdmin={isAdmin} onAdminClick={handleAdminSeatClick} />
+                        <SeatBox key={s.id} {...s} passengerName={assignedSeats[s.id]} isAnim={animatingSeat === s.id} mySeat={mySeat} isAdmin={isAdmin} onAdminClick={handleAdminSeatClick} isOtherZone={otherPool.includes(s.id)} isDonghuZone={donghuPool.includes(s.id)} />
                       ))}
                     </div>
                     <div className="flex gap-1 w-[48%] justify-end">
                       {row.seats.slice(2).map(s => (
-                        <SeatBox key={s.id} {...s} name={assignedSeats[s.id]} isAnim={animatingSeat === s.id} mySeat={mySeat} isAdmin={isAdmin} onAdminClick={handleAdminSeatClick} />
+                        <SeatBox key={s.id} {...s} passengerName={assignedSeats[s.id]} isAnim={animatingSeat === s.id} mySeat={mySeat} isAdmin={isAdmin} onAdminClick={handleAdminSeatClick} isOtherZone={otherPool.includes(s.id)} isDonghuZone={donghuPool.includes(s.id)} />
                       ))}
                     </div>
                   </div>
@@ -427,7 +437,7 @@
             </div>
           </div>
 
-          {/* 底部管理員區塊 */}
+          {/* 管理員介面 */}
           <div className="mt-8 pt-4 border-t border-slate-200">
             <button 
               onClick={toggleAdmin}
@@ -456,7 +466,6 @@
                       <span className="text-[10px] text-amber-800 bg-amber-200 px-2 py-0.5 rounded">點擊圖表座位可增刪修改</span>
                     </div>
 
-                    {/* 當期搭乘人數設定 */}
                     <div className="bg-white p-3 rounded-lg border border-amber-200 space-y-2">
                       <p className="text-xs font-bold text-amber-900 mb-1">📊 當期搭乘人數設定 (動態劃位與獨立位)</p>
                       <div className="grid grid-cols-2 gap-2 text-xs">
@@ -468,9 +477,6 @@
                             onChange={e => setOtherCount(e.target.value)}
                             className="w-full p-1.5 border rounded focus:ring-1 focus:ring-amber-500"
                           />
-                          <span className="text-[10px] text-slate-400 block mt-0.5">
-                            (鎖定釋出 {Math.ceil((Number(otherCount)||0)/5)} 個獨立位)
-                          </span>
                         </div>
                         <div>
                           <label className="block text-slate-600 mb-1">🏢 東湖宿舍人數：</label>
@@ -480,7 +486,6 @@
                             onChange={e => setDonghuCount(e.target.value)}
                             className="w-full p-1.5 border rounded focus:ring-1 focus:ring-amber-500"
                           />
-                          <span className="text-[10px] text-slate-400 block mt-0.5">(接續劃分座位)</span>
                         </div>
                       </div>
                       <button 
@@ -512,10 +517,9 @@
       );
     }
 
-    function SeatBox({ id, type, label, name, isAnim, mySeat, isAdmin, onAdminClick }) {
+    function SeatBox({ id, type, label, passengerName, isAnim, mySeat, isAdmin, onAdminClick, isOtherZone, isDonghuZone }) {
       if (type === 'driver') {
-        const driverName = name || '';
-        const isTaken = !!driverName;
+        const isTaken = !!passengerName;
         let driverStyle = "bg-gray-200 text-gray-600 border-gray-300";
         if (isAdmin) {
           driverStyle = isTaken 
@@ -527,45 +531,60 @@
 
         return (
           <div 
-            onClick={() => isAdmin && onAdminClick(id, driverName)}
+            onClick={() => isAdmin && onAdminClick(id, passengerName)}
             className={`w-full h-12 border rounded flex flex-col items-center justify-center text-xs font-bold transition-all ${driverStyle}`}
           >
             <span className="font-semibold">{label}</span>
             <span className="text-[10px] truncate max-w-full px-1">
-              {driverName ? `(${driverName})` : ''}
+              {passengerName ? `(${passengerName})` : ''}
             </span>
           </div>
         );
       }
+
       if (type === 'reserved') {
         return <div className="flex-1 h-12 bg-slate-200 border border-slate-300 rounded flex items-center justify-center text-[10px] text-center font-bold text-slate-500 whitespace-pre-line">{label}</div>;
       }
       if (type === 'free') {
-        return <div className="flex-1 h-12 bg-blue-50 border border-blue-200 rounded flex items-center justify-center text-[10px] text-center font-bold text-blue-500 whitespace-pre-line">{label}</div>;
+        return <div className="flex-1 h-12 bg-slate-100 border border-slate-300 rounded flex items-center justify-center text-[10px] text-center font-bold text-slate-500 whitespace-pre-line">{label}</div>;
       }
 
       const isMine = mySeat === id;
-      const isTaken = !!name;
+      const isTaken = !!passengerName;
 
-      let style = "bg-emerald-50 border-emerald-300 text-emerald-800";
-      if (isAnim) style = "bg-yellow-300 border-yellow-500 scale-105 shadow-md";
-      else if (isMine) style = "bg-emerald-500 border-emerald-600 text-white font-bold ring-2 ring-emerald-300";
-      else if (isTaken) {
-        style = isAdmin 
-          ? "bg-amber-100 border-amber-400 text-amber-900 cursor-pointer hover:bg-amber-200 transition-colors" 
-          : "bg-slate-300 border-slate-400 text-slate-600";
+      // 預設樣式
+      let style = "bg-slate-50 border-slate-300 text-slate-700";
+
+      // 區域顏色設定（未被選走且非動畫中）
+      if (!isTaken && !isAnim && !isMine) {
+        if (isOtherZone) {
+          style = "bg-blue-50 border-2 border-blue-400 text-blue-900";
+        } else if (isDonghuZone) {
+          style = "bg-emerald-50 border-2 border-emerald-400 text-emerald-900";
+        }
+      }
+
+      if (isAnim) {
+        style = "bg-yellow-300 border-2 border-yellow-500 scale-105 shadow-md font-bold text-slate-900";
+      } else if (isMine) {
+        style = "bg-emerald-600 border-2 border-emerald-700 text-white font-bold ring-2 ring-emerald-300 shadow-lg";
+      } else if (isTaken) {
+        style = "bg-slate-200 border border-slate-400 text-slate-600";
+        if (isAdmin) {
+          style += " cursor-pointer hover:bg-amber-100 border-amber-300";
+        }
       } else if (isAdmin) {
-        style += " cursor-pointer hover:bg-emerald-100 transition-colors border-dashed border-2";
+        style += " cursor-pointer hover:bg-slate-100 transition-colors border-dashed";
       }
 
       return (
         <div 
-          onClick={() => isAdmin && onAdminClick(id, name)}
-          className={`flex-1 h-12 border rounded flex flex-col items-center justify-center text-xs transition-all ${style}`}
+          onClick={() => isAdmin && onAdminClick(id, passengerName)}
+          className={`flex-1 h-12 rounded flex flex-col items-center justify-center text-xs transition-all relative ${style}`}
         >
           <span className="font-semibold">{id}</span>
           <span className="text-[10px] truncate max-w-full px-1">
-            {name || '可抽'}
+            {passengerName || '可抽'}
           </span>
         </div>
       );
